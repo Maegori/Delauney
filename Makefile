@@ -5,4 +5,4 @@ LDFLAGS =-L /usr/local/lib -lopencv_core -lopencv_imgproc -lopencv_highgui -lope
 INC =-I /usr/local/include/opencv4 # path to your header files
 
 main: main.cpp
-	$(CXX) -std=c++14 $(INC) main.cpp -o main $(CXXFLAGS) $(LDFLAGS) 
+	$(CXX) $(INC) main.cpp -o main $(CXXFLAGS) $(LDFLAGS) 
