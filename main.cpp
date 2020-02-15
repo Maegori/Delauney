@@ -97,15 +97,15 @@ void delauney(vector<Point> D_mat, int width, int height, Point ar, Mat& img) {
 
     Rect rect(0, 0, width + 5 * ar.x, height + 5 * ar.y);
     Subdiv2D subdiv(rect);
-    int size = x_size * y_size;
+    int sub_size = x_size * y_size;
 
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < sub_size; i++) {
         subdiv.insert(D_mat[i]);
     }
 
     vector<Vec6f> triangleList;
     subdiv.getTriangleList(triangleList);  
-    size = triangleList.size();
+    int size = triangleList.size();
 
     int pt0, pt1, pt2, pt3, pt4, pt5;
     Rect roi(2 * ar.x, 2 * ar.y, width, height);
@@ -125,8 +125,8 @@ void delauney(vector<Point> D_mat, int width, int height, Point ar, Mat& img) {
 
         for (int y = miny; y < maxy; y++) {
             for (int x = minx; x < maxx; x++) {     
-                Vec3b intensity = img.at<Vec3b>(y, x);
                 if (roi.contains(Point(x,y))){
+                    Vec3b intensity = img.at<Vec3b>(y, x);
                     red += (int) intensity[2];
                     green += (int) intensity[1];
                     blue += (int) intensity[0];
@@ -135,8 +135,8 @@ void delauney(vector<Point> D_mat, int width, int height, Point ar, Mat& img) {
             }  
         }
 
-        Point pts[6] = {Point(pt0, pt1), Point(pt2, pt3), Point(pt4, pt5)};
-        fillConvexPoly(img, pts, 3, Scalar(floor(blue / n), floor(green / n), floor(red / n),  255));
+        Point pts[3] = {Point(pt0, pt1), Point(pt2, pt3), Point(pt4, pt5)};
+        fillConvexPoly(img, pts, 3, Scalar(floor(blue / n), floor(green / n), floor(red / n)));
 
         if (lines) {            
             Point points[3];
