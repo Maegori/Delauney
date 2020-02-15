@@ -1,8 +1,6 @@
 #include <iostream>
-#include <fstream>
 #include <vector>
 #include <math.h> 
-#include <stdlib.h>
 #include <algorithm>   
 
 #include <opencv4/opencv2/imgproc/imgproc.hpp>
@@ -12,16 +10,21 @@
 using namespace std;
 using namespace cv;
 
-Point generate_aspect(int width, int height, int dens);
-vector<Point> point_generator(int width, int height, Point ar);
-void draw_triangles(Mat& img, vector<vector<Point> > D_mat, int width, int height, Point ar);
-void delauney(vector<Point> D_mat, int width, int height, Point ar, Mat& img);
+Point generate_aspect(int dens);
+vector<Point> point_generator(Point ar);
+void delauney(vector<Point> D_mat, Point ar, Mat& img);
 void basic(int, void*);
 
 int slider = 0;
-const int slider_max = 97;
-Mat img;
+int slider_max = 99;
 int lines = 1;
+
+Mat img;
+Mat border;
+Mat roi_img; 
+Scalar black(0, 0, 0);
+int width;
+int height;
 
 int main() {
     char filename[50];
@@ -32,11 +35,16 @@ int main() {
         cin >> filename;
         img = imread(filename, 1);
     } while (! img.data);
+
+    width = img.size[1];
+    height = img.size[0];
     
+    srand(time(0));
+
     namedWindow("Delauney", WINDOW_NORMAL);
     namedWindow("Slider", WINDOW_NORMAL);
     resizeWindow("Delauney", 1920, 1080);
-    createTrackbar("Density", "Slider", &slider, slider_max, basic);
+    createTrackbar("Density:", "Slider", &slider, slider_max, basic);
 
     waitKey(0);    
     img.release();
@@ -45,38 +53,29 @@ int main() {
 }
 
 void basic(int, void*) {
-    int im_width = img.size[1];
-    int im_height = img.size[0];
+    Point ar = generate_aspect(slider);
+    vector<Point> D_mat = point_generator(ar);
 
-    Point ar = generate_aspect(im_width, im_height, slider);
-    vector<Point> D_mat = point_generator(im_width, im_height, ar);
-
-    Mat border;
-    copyMakeBorder(img, border, ar.y * 2, ar.y * 2, ar.x * 2, ar.x * 2, BORDER_CONSTANT, Scalar(255,255,255));
-
-    delauney(D_mat, im_width, im_height, ar, border);
+    copyMakeBorder(img, border, ar.y * 2, ar.y * 2, ar.x * 2, ar.x * 2, BORDER_CONSTANT, black);
+    delauney(D_mat, ar, border);
 }
 
-Point generate_aspect(int width, int height, int dens) {
-    int adj_dens = abs(dens - 100);
-
-    int x_size = ceil(width / 1000.0) * adj_dens;
-    int y_size = ceil(height / 1000.0) * adj_dens;
+Point generate_aspect(int dens) {
+    int x_size = ceil(width / 1000.0) * abs(dens - 100);
+    int y_size = ceil(height / 1000.0) * abs(dens - 100);
 
     return Point(x_size, y_size);
 }
 
-vector<Point> point_generator(int width, int height, Point ar) {
+vector<Point> point_generator(Point ar) {
     int rnd_w;
     int rnd_h;
     int n = 0;
 
-    int x_len = floor(width / (double)ar.x) + 4;
-    int y_len = floor(height / (double)ar.y) + 4;
+    int x_len = (int) (width / ar.x) + 4;
+    int y_len = (int) (height / ar.y) + 4;
 
     vector<Point> D_mat(y_len * x_len);
-
-    srand(time(0));
 
     for (int i = 0; i < y_len; i++) {
         for (int j = 0; j < x_len; j++) {
@@ -91,15 +90,12 @@ vector<Point> point_generator(int width, int height, Point ar) {
     return D_mat;
 }
 
-void delauney(vector<Point> D_mat, int width, int height, Point ar, Mat& img) {
-    int x_size = floor(width / (double)ar.x) + 4;
-    int y_size = floor(height / (double)ar.y) + 4;
-
+void delauney(vector<Point> D_mat, Point ar, Mat& img) {
     Rect rect(0, 0, width + 5 * ar.x, height + 5 * ar.y);
     Subdiv2D subdiv(rect);
-    int sub_size = x_size * y_size;
+    int d_size = D_mat.size();
 
-    for (int i = 0; i < sub_size; i++) {
+    for (int i = 0; i < d_size; i++) {
         subdiv.insert(D_mat[i]);
     }
 
@@ -112,9 +108,10 @@ void delauney(vector<Point> D_mat, int width, int height, Point ar, Mat& img) {
 
     for (int i = 0; i < size; i++) {
         Vec6f t = triangleList[i];
-        pt0 = round(t[0]); pt1 = round(t[1]); pt2 = round(t[2]); 
-        pt3 = round(t[3]); pt4 = round(t[4]); pt5 = round(t[5]);
-        int red = 0, green = 0, blue = 0, n = 1;
+        pt0 = (int) t[0]; pt1 = (int) t[1]; pt2 = (int) t[2]; 
+        pt3 = (int) t[3]; pt4 = (int) t[4]; pt5 = (int) t[5];
+        float r = 0, g = 0, b = 0;
+        int n = 1;
 
         auto xrange = minmax({pt0, pt2, pt4});
         auto yrange = minmax({pt1, pt3, pt5});
@@ -127,39 +124,25 @@ void delauney(vector<Point> D_mat, int width, int height, Point ar, Mat& img) {
             for (int x = minx; x < maxx; x++) {     
                 if (roi.contains(Point(x,y))){
                     Vec3b intensity = img.at<Vec3b>(y, x);
-                    red += (int) intensity[2];
-                    green += (int) intensity[1];
-                    blue += (int) intensity[0];
+                    r += intensity[2];
+                    g += intensity[1];
+                    b += intensity[0];
                     n += 1;
                 } 
             }  
         }
 
         Point pts[3] = {Point(pt0, pt1), Point(pt2, pt3), Point(pt4, pt5)};
-        fillConvexPoly(img, pts, 3, Scalar(floor(blue / n), floor(green / n), floor(red / n)));
+        fillConvexPoly(img, pts, 3, Scalar((int) (b / n), (int) (g / n), (int) (r / n)));
 
         if (lines) {            
-            Point points[3];
-            points[0] = Point(cvRound(t[0]), cvRound(t[1]));
-            points[1] = Point(cvRound(t[2]), cvRound(t[3]));
-            points[2] = Point(cvRound(t[4]), cvRound(t[5]));
-
-            Scalar delaunay_color(0, 0, 0);
-
-            line(img, pts[0], pts[1], delaunay_color, 1, 0);
-            line(img, pts[1], pts[2], delaunay_color, 1, 0);
-            line(img, pts[2], pts[0], delaunay_color, 1, 0);
-        }    
-        
+            line(img, pts[0], pts[1], black, 1, 0);
+            line(img, pts[1], pts[2], black, 1, 0);
+            line(img, pts[2], pts[0], black, 1, 0);
+        }       
     }
     
-    Mat roi_img = img(roi);
+    roi_img = img(roi);
 
     imshow("Delauney", roi_img);
 }
-
-
-
-
-
-
