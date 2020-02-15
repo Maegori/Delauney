@@ -6,28 +6,24 @@
 #include <algorithm>   
 
 #include <opencv4/opencv2/imgproc/imgproc.hpp>
-#include <opencv4/opencv2/imgcodecs/imgcodecs.hpp>
 #include <opencv4/opencv2/highgui/highgui.hpp>
 #include <opencv2/core/core.hpp>
-#include <opencv2/core/types.hpp>
-#include <opencv2/core/types.hpp>
 
 using namespace std;
 using namespace cv;
 
 Point generate_aspect(int width, int height, int dens);
-vector<vector<Point> > point_generator(int width, int height, Point ar);
+vector<Point> point_generator(int width, int height, Point ar);
 void draw_triangles(Mat& img, vector<vector<Point> > D_mat, int width, int height, Point ar);
-void delauney(vector<vector<Point> > D_mat, int width, int height, Point ar, Mat& img);
+void delauney(vector<Point> D_mat, int width, int height, Point ar, Mat& img);
 void basic(int, void*);
 
-int slider;
+int slider = 0;
 const int slider_max = 97;
 Mat img;
 int lines = 1;
 
-int main()
-{
+int main() {
     char filename[50];
 
     do
@@ -36,10 +32,6 @@ int main()
         cin >> filename;
         img = imread(filename, 1);
     } while (! img.data);
-
-    //img = imread("mona.jpg", 1); 
-
-    slider = 0;
     
     namedWindow("Delauney", WINDOW_NORMAL);
     namedWindow("Slider", WINDOW_NORMAL);
@@ -53,26 +45,19 @@ int main()
 }
 
 void basic(int, void*) {
-    
-
     int im_width = img.size[1];
     int im_height = img.size[0];
 
     Point ar = generate_aspect(im_width, im_height, slider);
-    vector<vector<Point> > D_mat = point_generator(im_width, im_height, ar);
+    vector<Point> D_mat = point_generator(im_width, im_height, ar);
 
-    // create white image and draw the triangles on it
-    //Mat triangles(im_height + 4 * ar.y, im_width + 4 * ar.x, CV_8UC3, Scalar(255, 255, 255));
     Mat border;
     copyMakeBorder(img, border, ar.y * 2, ar.y * 2, ar.x * 2, ar.x * 2, BORDER_CONSTANT, Scalar(255,255,255));
-    //draw_triangles(triangles, D_mat, im_width, im_height, ar);
-    //triangles.release();
 
     delauney(D_mat, im_width, im_height, ar, border);
 }
 
-Point generate_aspect(int width, int height, int dens)
-{
+Point generate_aspect(int width, int height, int dens) {
     int adj_dens = abs(dens - 100);
 
     int x_size = ceil(width / 1000.0) * adj_dens;
@@ -81,50 +66,46 @@ Point generate_aspect(int width, int height, int dens)
     return Point(x_size, y_size);
 }
 
-vector<vector<Point> > point_generator(int width, int height, Point ar)
-{
+vector<Point> point_generator(int width, int height, Point ar) {
+    int rnd_w;
+    int rnd_h;
+    int n = 0;
+
     int x_len = floor(width / (double)ar.x) + 4;
     int y_len = floor(height / (double)ar.y) + 4;
 
-    vector<vector<Point> > D_mat((y_len), vector<Point> (x_len));
+    vector<Point> D_mat(y_len * x_len);
 
     srand(time(0));
 
-    for (int i = 0; i < y_len; i++)
-    {
-        for (int j = 0; j < x_len; j++)
-        {
-            // int num = (rand() % (upper - lower + 1)) + lower
+    for (int i = 0; i < y_len; i++) {
+        for (int j = 0; j < x_len; j++) {
+            rnd_w = (rand() % ((j * ar.x + ar.x) - j * ar.x + 1)) + j * ar.x;
+            rnd_h = (rand() % ((i * ar.y + ar.y) - i * ar.y + 1)) + i * ar.y;
 
-            int rnd_w = (rand() % ((j * ar.x + ar.x) - j * ar.x + 1)) + j * ar.x;
-            int rnd_h = (rand() % ((i * ar.y + ar.y) - i * ar.y + 1)) + i * ar.y;
-
-            D_mat[i][j] = Point(rnd_w, rnd_h);
+            D_mat[n] = (Point(rnd_w, rnd_h));
+            n++;
         }
     }
 
     return D_mat;
 }
 
-void delauney(vector<vector<Point> > D_mat, int width, int height, Point ar, Mat& img)
-{
-    int x_size = D_mat[0].size();
-    int y_size = D_mat.size();
+void delauney(vector<Point> D_mat, int width, int height, Point ar, Mat& img) {
+    int x_size = floor(width / (double)ar.x) + 4;
+    int y_size = floor(height / (double)ar.y) + 4;
 
-    vector<Point> d_points;
     Rect rect(0, 0, width + 5 * ar.x, height + 5 * ar.y);
     Subdiv2D subdiv(rect);
+    int size = x_size * y_size;
 
-    for (int i = 0; i < y_size; i++) {
-        for (int j = 0; j < x_size; j++) {
-            subdiv.insert(D_mat[i][j]);
-            d_points.push_back(D_mat[i][j]);
-        }
+    for (int i = 0; i < size; i++) {
+        subdiv.insert(D_mat[i]);
     }
 
     vector<Vec6f> triangleList;
-    subdiv.getTriangleList(triangleList);
-    int size = triangleList.size();  
+    subdiv.getTriangleList(triangleList);  
+    size = triangleList.size();
 
     int pt0, pt1, pt2, pt3, pt4, pt5;
     Rect roi(2 * ar.x, 2 * ar.y, width, height);
@@ -171,65 +152,10 @@ void delauney(vector<vector<Point> > D_mat, int width, int height, Point ar, Mat
         }    
         
     }
-
     
     Mat roi_img = img(roi);
 
-    
     imshow("Delauney", roi_img);
-    //for (int i = 0; i < size; i++) {
-        //cout << "triangle #:  " << i <<" r g b n" << (int) triangles[i].red << triangles[i].green << triangles[i].blue << triangles[i].n << endl; 
-    //}
-
-}
-
-void draw_triangles(Mat& img, vector<vector<Point> > D_mat, int width, int height, Point ar)
-{
-    int x_size = D_mat[0].size();
-    int y_size = D_mat.size();
-
-    vector<Point> d_points;
-    Rect rect(0, 0, width + 4 * ar.x, height + 4 * ar.y);
-    Subdiv2D subdiv(rect);
-
-    for (int i = 0; i < y_size; i++) {
-        for (int j = 0; j < x_size; j++) {
-            subdiv.insert(D_mat[i][j]);
-            d_points.push_back(D_mat[i][j]);
-        }
-    }
-
-    vector<Vec6f> triangleList;
-    subdiv.getTriangleList(triangleList);
-    vector<Point> pt(3);
-    int size = triangleList.size();
-
-    Scalar delaunay_color(0, 0, 0);
-
-    for (int i = 0; i < size; i++) {
-        Vec6f t = triangleList[i];
-        pt[0] = Point(cvRound(t[0]), cvRound(t[1]));
-        pt[1] = Point(cvRound(t[2]), cvRound(t[3]));
-        pt[2] = Point(cvRound(t[4]), cvRound(t[5]));
-
-        if ( rect.contains(pt[0]) && rect.contains(pt[1]) && rect.contains(pt[2])) {
-            line(img, pt[0], pt[1], delaunay_color, 1, 0);
-            line(img, pt[1], pt[2], delaunay_color, 1, 0);
-            line(img, pt[2], pt[0], delaunay_color, 1, 0);
-        }
-    }
-
-    Rect roi(ar.x, ar.y, width, height);
-    Mat roi_img = img(roi);
-    cout << img.size() << endl;
-    cout << roi_img.size() << endl;
-
-    namedWindow( "Delauney mesh", WINDOW_NORMAL);
-    imshow( "Delauney mesh", img);
-
-    namedWindow( "Normalised delauney mesh", WINDOW_NORMAL);
-    imshow( "Normalised delauney mesh", roi_img);
-  
 }
 
 
