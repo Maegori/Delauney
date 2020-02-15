@@ -7,6 +7,8 @@
 #include <opencv4/opencv2/highgui/highgui.hpp>
 #include <opencv2/core/core.hpp>
 
+#include <omp.h>
+
 using namespace std;
 using namespace cv;
 
@@ -57,6 +59,7 @@ void basic(int, void*) {
     vector<Point> D_mat = point_generator(ar);
 
     copyMakeBorder(img, border, ar.y * 2, ar.y * 2, ar.x * 2, ar.x * 2, BORDER_CONSTANT, black);
+   
     delauney(D_mat, ar, border);
 }
 
@@ -106,6 +109,7 @@ void delauney(vector<Point> D_mat, Point ar, Mat& img) {
     int pt0, pt1, pt2, pt3, pt4, pt5;
     Rect roi(2 * ar.x, 2 * ar.y, width, height);
 
+    #pragma omp parallel for private(pt0, pt1, pt2, pt3, pt4, pt5)
     for (int i = 0; i < size; i++) {
         Vec6f t = triangleList[i];
         pt0 = (int) t[0]; pt1 = (int) t[1]; pt2 = (int) t[2]; 
@@ -134,13 +138,14 @@ void delauney(vector<Point> D_mat, Point ar, Mat& img) {
 
         Point pts[3] = {Point(pt0, pt1), Point(pt2, pt3), Point(pt4, pt5)};
         fillConvexPoly(img, pts, 3, Scalar((int) (b / n), (int) (g / n), (int) (r / n)));
-
+        
         if (lines) {            
             line(img, pts[0], pts[1], black, 1, 0);
             line(img, pts[1], pts[2], black, 1, 0);
             line(img, pts[2], pts[0], black, 1, 0);
         }       
     }
+    
     
     roi_img = img(roi);
 
