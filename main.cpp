@@ -1,25 +1,33 @@
 #include <iostream>
 #include <vector> 
 #include <algorithm>   
+#include <math.h>
+#include <omp.h>
+#include <random>
+#include <unistd.h>
 
 #include <opencv4/opencv2/imgproc/imgproc.hpp>
 #include <opencv4/opencv2/highgui/highgui.hpp>
 #include <opencv2/core/core.hpp>
-
-#include <math.h>
-#include <omp.h>
 
 using namespace std;
 using namespace cv;
 
 Point generate_aspect(int dens);
 vector<Point> point_generator(Point ar);
+vector<Point> generate_random_points(vector<Point> D_mat);
+vector<Point> generate_movement_vector(vector<Point> D_mat);
+vector<Point> recal_D_mat(vector<Point> D_mat, vector<Point> norm_vector, float state); 
 void delauney(vector<Point> D_mat, Point ar, Mat& img);
 void basic(int, void*);
 
-int slider = 0;
+int slider = NULL;
 const int slider_max = 99;
 const int lines = 0;
+
+int anim_steps = 100;
+float sin_update = (2 * M_PI) / anim_steps;
+unsigned int slp = 500000;
 
 Mat img;
 Mat padded;
@@ -28,6 +36,7 @@ Mat roi_img;
 Scalar black(0, 0, 0);
 int width;
 int height;
+float strength;
 
 int main() {
     char filename[50];
@@ -61,14 +70,26 @@ int main() {
 void basic(int, void*) {
     Point ar = generate_aspect(slider);
     vector<Point> D_mat = point_generator(ar);
+    vector<Point> M_vec = generate_movement_vector(D_mat);
 
     copyMakeBorder(img, padded, ar.y * 2, ar.y * 2, ar.x * 2, ar.x * 2, BORDER_CONSTANT, black);
     delauney(D_mat, ar, padded);
+    int step = 0;
+
+    // while (1) {
+    //     cout << "alive" << endl;
+    //     D_mat = recal_D_mat(D_mat, M_vec, step);
+    //     delauney(D_mat, ar, padded);
+    //     step++;
+    //     usleep(slp);
+    // }
 }
 // calculates cell size
 Point generate_aspect(int dens) {
     int x_size = ceil(width / 1000.0) * abs(dens - 100);
     int y_size = ceil(height / 1000.0) * abs(dens - 100);
+
+    strength = sqrt((x_size * x_size) + (y_size + y_size));
 
     return Point(x_size, y_size);
 }
@@ -99,6 +120,36 @@ vector<Point> point_generator(Point ar) {
     return D_mat;
 }
 
+vector<Point> generate_movement_vector(vector<Point> D_mat) {
+    auto size = D_mat.size();
+    vector<Point> norm_vectors(size);
+
+    Point p;
+
+    random_device rd;
+    default_random_engine eng(rd());
+
+    uniform_int_distribution<int> distr_w(-width, width); 
+    uniform_int_distribution<int> distr_h(-height, height);
+
+    for (long unsigned int i = 0; i < size; i++) {
+        p = (Point(distr_w(eng), distr_h(eng)));
+        norm_vectors[i] = p / sqrt(norm(p));
+    }
+
+    return norm_vectors;    
+}
+
+vector<Point> recal_D_mat(vector<Point> D_mat, vector<Point> norm_vector, float state) {
+    auto size = D_mat.size();
+
+    for (long unsigned int i = 0; i < size; i++) {
+        D_mat[i] = D_mat[i] + ((state * strength) * norm_vector[i]);
+    }
+
+    return D_mat;
+}
+
 // computes delauney, finds avg color of each triangle and draws the triangle
 void delauney(vector<Point> D_mat, Point ar, Mat& img) {
     Rect rect(0, 0, width + 5 * ar.x, height + 5 * ar.y);
@@ -107,7 +158,9 @@ void delauney(vector<Point> D_mat, Point ar, Mat& img) {
 
     // compute delauney triangulation
     for (int i = 0; i < d_size; i++) {
-        subdiv.insert(D_mat[i]);
+        if (rect.contains(D_mat[i])) {
+            subdiv.insert(D_mat[i]);
+        }
     }
 
     vector<Vec6f> triangleList;
